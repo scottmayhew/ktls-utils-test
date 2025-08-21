@@ -82,6 +82,18 @@ openssl ca \
 
 cp ca/signing-ca.crt /var/www/html
 
+echo "Generate initial CRL"
+openssl ca -gencrl \
+	-config etc/signing-ca.conf \
+	-out crl/signing-ca.crl
+
+echo "Copy initial CRL to distribution point"
+cp crl/signing-ca.crl /var/www/html
+
+echo "Copy initial CRL to /etc/pki/crl"
+[ ! -d /etc/pki/crl ] && mkdir /etc/pki/crl
+cp crl/signing-ca.crl /etc/pki/crl
+
 echo "Create OCSP signing key and request"
 openssl req -new \
 	-config etc/ocspsign.conf \
@@ -136,11 +148,13 @@ nl=9
 
 [authenticate.client]
 x509.truststore=/etc/pki/tls/certs/signing-ca.crt
+x509.crl=/etc/pki/crl/signing-ca.crl
 x509.certificate=/etc/pki/tls/certs/ktls.pem
 x509.private_key=/etc/pki/tls/private/ktls.key
 
 [authenticate.server]
 x509.truststore=/etc/pki/tls/certs/signing-ca.crt
+x509.crl=/etc/pki/crl/signing-ca.crl
 x509.certificate=/etc/pki/tls/certs/ktls.pem
 x509.private_key=/etc/pki/tls/private/ktls.key
 EOF
@@ -237,13 +251,16 @@ openssl ca \
 	-revoke certs/ktls.pem \
 	-crl_reason keyCompromise
 
-echo "Generate CRL"
+echo "Generate updated CRL"
 openssl ca -gencrl \
 	-config etc/signing-ca.conf \
 	-out crl/signing-ca.crl
 
-echo "Copy CRL to distribution point"
+echo "Copy updated CRL to distribution point"
 cp crl/signing-ca.crl /var/www/html
+
+echo "Copy updated CRL to /etc/pki/crl"
+cp crl/signing-ca.crl /etc/pki/crl
 
 echo "Check CRL"
 SERIAL=$(openssl x509 -in /etc/pki/tls/certs/ktls.pem -noout -serial|awk -F= '{ print $2 }')
@@ -269,7 +286,8 @@ echo "Try to mount $MYHOSTNAME:/export with xprtsec=tls after revoking cert"
 mount -o v4.2,xprtsec=tls $MYHOSTNAME:/export /mnt
 if [ $? -eq 0 ]; then
 	echo "Mounted $MYHOSTNAME:/export with xprtsec=tls after revoking cert!"
-	echo "This is expected, because tlshd does not check CRL or OCSP."
+	echo "This is expected in ktls-utils releases prior to 1.2.0, because tlshd did not implement CRL checking."
+	echo "Note that no versions of ktls-utils currently implement OCSP checking."
 	umount /mnt
 fi
 
