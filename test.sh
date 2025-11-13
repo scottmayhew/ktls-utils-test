@@ -7,7 +7,6 @@
 MYOLDHOSTNAME=$(hostnamectl hostname --static)
 MYHOSTNAME=nfs.ktls-utils.test
 MYIP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
-OCSP_PID=0
 
 cleanup() {
 	echo "Cleanup..."
@@ -21,9 +20,6 @@ cleanup() {
 	rm -f /etc/pki/tls/certs/signing-ca.crt
 	rm -f /etc/pki/tls/private/ktls.key
 	rm -rf ca certs crl
-	if [ $OCSP_PID -ne 0 ]; then
-		kill $OCSP_PID
-	fi
 }
 
 trap cleanup EXIT
@@ -86,29 +82,6 @@ openssl ca -gencrl \
 echo "Copy initial CRL to /etc/pki/crl"
 [ ! -d /etc/pki/crl ] && mkdir /etc/pki/crl
 cp crl/signing-ca.crl /etc/pki/crl
-
-echo "Create OCSP signing key and request"
-openssl req -new \
-	-config etc/ocspsign.conf \
-	-out certs/signing-ca-ocsp.csr \
-	-keyout certs/signing-ca-ocsp.key >/dev/null 2>&1
-
-echo "Create OCSP signing certificate"
-openssl ca \
-	-config etc/signing-ca.conf \
-	-in certs/signing-ca-ocsp.csr -out certs/signing-ca-ocsp.crt \
-	-extensions ocspsign_ext -days 14 -batch
-
-echo "Start OCSP responder"
-openssl ocsp \
-	-url http://${MYHOSTNAME}:8888 \
-	-index ca/signing-ca/db/signing-ca.db \
-	-CA ca/signing-ca.crt \
-	-rsigner certs/signing-ca-ocsp.crt \
-	-rkey certs/signing-ca-ocsp.key \
-	-ndays 1 &
-
-OCSP_PID=$!
 
 echo "Create kTLS key and request"
 openssl req -new \
@@ -256,28 +229,11 @@ echo "Check CRL"
 SERIAL=$(openssl x509 -in /etc/pki/tls/certs/ktls.pem -noout -serial|awk -F= '{ print $2 }')
 openssl crl -in /etc/pki/crl/signing-ca.crl -noout -text | grep -A4 $SERIAL
 
-# This is weird.  The first time you check the OCSP responder, it says the cert status is "unknown".
-# So we'll just check it twice. ¯\_(ツ)_/¯
-echo "Check OCSP responder"
-openssl ocsp \
-	-url http://nfs.ktls-utils.test:8888 \
-	-CAfile ca/root-ca.crt \
-	-issuer ca/signing-ca.crt \
-	-cert /etc/pki/tls/certs/ktls.pem
-
-echo "Check it again"
-openssl ocsp \
-	-url http://nfs.ktls-utils.test:8888 \
-	-CAfile ca/root-ca.crt \
-	-issuer ca/signing-ca.crt \
-	-cert /etc/pki/tls/certs/ktls.pem
-
 echo "Try to mount $MYHOSTNAME:/export with xprtsec=tls after revoking cert"
 mount -o v4.2,xprtsec=tls $MYHOSTNAME:/export /mnt
 if [ $? -eq 0 ]; then
 	echo "Mounted $MYHOSTNAME:/export with xprtsec=tls after revoking cert!"
 	echo "This is expected in ktls-utils releases prior to 1.2.0, because tlshd did not implement CRL checking."
-	echo "Note that no versions of ktls-utils currently implement OCSP checking."
 	umount /mnt
 fi
 
