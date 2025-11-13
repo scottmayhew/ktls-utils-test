@@ -50,7 +50,7 @@ openssl ca \
 	-selfsign \
 	-config etc/root-ca.conf \
 	-in ca/root-ca.csr -out ca/root-ca.crt \
-	-extensions root_ca_ext -batch
+	-notext -extensions root_ca_ext -batch
 
 echo "Create signing CA directories"
 mkdir -p ca/signing-ca/private ca/signing-ca/db crl certs
@@ -72,7 +72,7 @@ echo "Create signing CA certificate"
 openssl ca \
 	-config etc/root-ca.conf \
 	-in ca/signing-ca.csr -out ca/signing-ca.crt \
-	-extensions signing_ca_ext -batch
+	-notext -extensions signing_ca_ext -batch
 
 echo "Generate initial CRL"
 openssl ca -gencrl \
@@ -97,7 +97,7 @@ ENDDATE=$(date --date=@$(( $(date +%s) + 30 )) --universal +%y%m%d%H%M%SZ)
 openssl ca \
 	-config etc/signing-ca.conf \
 	-in certs/ktls.req -out certs/ktls.pem \
-	-extensions server_ext -batch -enddate $ENDDATE
+	-notext -extensions server_ext -batch -enddate $ENDDATE
 
 cp ca/signing-ca.crt /etc/pki/tls/certs
 cp certs/ktls.pem /etc/pki/tls/certs
@@ -193,7 +193,7 @@ echo "Create new kTLS certificate with default lifetime"
 openssl ca \
 	-config etc/signing-ca.conf \
 	-in certs/ktls.req -out certs/ktls.pem \
-	-extensions server_ext -batch
+	-notext -extensions server_ext -batch
 
 cp certs/ktls.pem /etc/pki/tls/certs
 
