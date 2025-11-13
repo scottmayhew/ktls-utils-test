@@ -27,6 +27,7 @@ trap cleanup EXIT
 trap cleanup INT
 
 echo "Setup..."
+dnf -y install ktls-utils nfs-utils
 hostnamectl hostname --static "$MYHOSTNAME"
 cp /etc/tlshd.conf /etc/tlshd.conf.bak
 
