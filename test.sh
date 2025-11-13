@@ -17,9 +17,10 @@ cleanup() {
 	systemctl stop tlshd
 	cp /etc/tlshd.conf.bak /etc/tlshd.conf
 	rm -f /etc/pki/tls/certs/ktls.pem
-	rm -f /etc/pki/tls/certs/signing-ca.crt
 	rm -f /etc/pki/tls/private/ktls.key
 	rm -rf ca certs crl
+	rm -f /etc/pki/ca-trust/source/anchors/root-ca.crt
+	update-ca-trust
 }
 
 trap cleanup EXIT
@@ -99,9 +100,11 @@ openssl ca \
 	-in certs/ktls.req -out certs/ktls.pem \
 	-notext -extensions server_ext -batch -enddate $ENDDATE
 
-cp ca/signing-ca.crt /etc/pki/tls/certs
-cp certs/ktls.pem /etc/pki/tls/certs
+cat certs/ktls.pem ca/signing-ca.crt >/etc/pki/tls/certs/ktls.pem
 cp certs/ktls.key /etc/pki/tls/private
+
+cp ca/root-ca.crt /etc/pki/ca-trust/source/anchors
+update-ca-trust
 
 cat <<EOF >/etc/tlshd.conf
 [debug]
@@ -113,13 +116,13 @@ nl=9
 #keyrings= <keyring>;<keyring>;<keyring>
 
 [authenticate.client]
-x509.truststore=/etc/pki/tls/certs/signing-ca.crt
+#x509.truststore=
 x509.crl=/etc/pki/crl/signing-ca.crl
 x509.certificate=/etc/pki/tls/certs/ktls.pem
 x509.private_key=/etc/pki/tls/private/ktls.key
 
 [authenticate.server]
-x509.truststore=/etc/pki/tls/certs/signing-ca.crt
+#x509.truststore=
 x509.crl=/etc/pki/crl/signing-ca.crl
 x509.certificate=/etc/pki/tls/certs/ktls.pem
 x509.private_key=/etc/pki/tls/private/ktls.key
@@ -195,7 +198,7 @@ openssl ca \
 	-in certs/ktls.req -out certs/ktls.pem \
 	-notext -extensions server_ext -batch
 
-cp certs/ktls.pem /etc/pki/tls/certs
+cat certs/ktls.pem ca/signing-ca.crt >/etc/pki/tls/certs/ktls.pem
 
 echo "Try to mount $MYHOSTNAME:/export with xprtsec=tls after signing new cert"
 mount -o v4.2,xprtsec=tls $MYHOSTNAME:/export /mnt
