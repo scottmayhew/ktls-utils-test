@@ -56,8 +56,6 @@ openssl ca \
 	-in ca/root-ca.csr -out ca/root-ca.crt \
 	-extensions root_ca_ext -batch
 
-cp ca/root-ca.crt /var/www/html
-
 echo "Create signing CA directories"
 mkdir -p ca/signing-ca/private ca/signing-ca/db crl certs
 chmod 700 ca/signing-ca/private
@@ -80,15 +78,10 @@ openssl ca \
 	-in ca/signing-ca.csr -out ca/signing-ca.crt \
 	-extensions signing_ca_ext -batch
 
-cp ca/signing-ca.crt /var/www/html
-
 echo "Generate initial CRL"
 openssl ca -gencrl \
 	-config etc/signing-ca.conf \
 	-out crl/signing-ca.crl
-
-echo "Copy initial CRL to distribution point"
-cp crl/signing-ca.crl /var/www/html
 
 echo "Copy initial CRL to /etc/pki/crl"
 [ ! -d /etc/pki/crl ] && mkdir /etc/pki/crl
@@ -256,15 +249,12 @@ openssl ca -gencrl \
 	-config etc/signing-ca.conf \
 	-out crl/signing-ca.crl
 
-echo "Copy updated CRL to distribution point"
-cp crl/signing-ca.crl /var/www/html
-
 echo "Copy updated CRL to /etc/pki/crl"
 cp crl/signing-ca.crl /etc/pki/crl
 
 echo "Check CRL"
 SERIAL=$(openssl x509 -in /etc/pki/tls/certs/ktls.pem -noout -serial|awk -F= '{ print $2 }')
-curl http://nfs.ktls-utils.test/signing-ca.crl | openssl crl -noout -text | grep -A4 $SERIAL
+openssl crl -in /etc/pki/crl/signing-ca.crl -noout -text | grep -A4 $SERIAL
 
 # This is weird.  The first time you check the OCSP responder, it says the cert status is "unknown".
 # So we'll just check it twice. ¯\_(ツ)_/¯
